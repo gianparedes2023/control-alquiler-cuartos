@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Control mensual de alquileres</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <section id="loginView" class="auth-screen">
+      <form id="loginForm" class="auth-card">
+        <p class="eyebrow">Acceso seguro</p>
+        <h1>Iniciar sesion</h1>
+        <p class="auth-copy">Ingresa con tu usuario para ver y administrar los alquileres.</p>
+        <label>
+          Correo
+          <input id="loginUsername" required type="email" autocomplete="username" placeholder="admin@tudominio.com">
+        </label>
+        <label>
+          Contrasena
+          <input id="loginPassword" required type="password" autocomplete="current-password" placeholder="admin123">
+        </label>
+        <p id="loginError" class="error-text" role="alert"></p>
+        <button type="submit">Entrar</button>
+      </form>
+    </section>
+
+    <main id="appView" class="shell hidden">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Control de cuartos</p>
+          <h1>Alquileres mensuales</h1>
+        </div>
+        <div class="header-tools">
+          <div class="user-chip">
+            <span id="currentUserName">Usuario</span>
+            <small id="currentUserRole">Rol</small>
+          </div>
+          <div class="month-control">
+            <label for="monthPicker">Mes</label>
+            <input id="monthPicker" type="month">
+          </div>
+          <button id="logoutBtn" class="secondary" type="button">Salir</button>
+        </div>
+      </header>
+
+      <nav class="app-nav" aria-label="Secciones">
+        <button class="nav-btn active" type="button" data-page-target="control">Control</button>
+        <button class="nav-btn" type="button" data-page-target="reports">Reportes</button>
+        <button id="usersNavBtn" class="nav-btn hidden" type="button" data-page-target="users">Usuarios</button>
+      </nav>
+
+      <section id="controlPage" class="app-page" data-page="control">
+        <section class="summary-grid" aria-label="Resumen mensual">
+          <article class="metric">
+            <span>Ingreso esperado</span>
+            <strong id="expectedTotal">S/ 0.00</strong>
+          </article>
+          <article class="metric">
+            <span>Cobrado</span>
+            <strong id="paidTotal">S/ 0.00</strong>
+          </article>
+          <article class="metric warn">
+            <span>Por cobrar</span>
+            <strong id="pendingTotal">S/ 0.00</strong>
+          </article>
+          <article class="metric">
+            <span>Ocupacion</span>
+            <strong id="occupancy">0/0</strong>
+          </article>
+        </section>
+
+        <section class="workspace">
+          <aside class="panel">
+            <h2>Cuarto e inquilino</h2>
+            <form id="roomForm" class="form-grid">
+              <input type="hidden" id="roomId">
+              <label>
+                Cuarto
+                <input id="roomName" required placeholder="Ej. Cuarto 1">
+              </label>
+              <label>
+                Inquilino
+                <input id="tenantName" placeholder="Nombre completo">
+              </label>
+              <label>
+                Celular
+                <input id="tenantPhone" placeholder="999 999 999">
+              </label>
+              <label>
+                Alquiler mensual
+                <input id="monthlyRent" required type="number" min="0" step="0.01" placeholder="450">
+              </label>
+              <label>
+                Dia de pago
+                <input id="dueDay" required type="number" min="1" max="31" value="5">
+              </label>
+              <label>
+                Estado
+                <select id="roomStatus">
+                  <option value="occupied">Ocupado</option>
+                  <option value="available">Disponible</option>
+                </select>
+              </label>
+              <div class="actions">
+                <button type="submit">Guardar</button>
+                <button type="button" class="secondary" id="clearRoom">Limpiar</button>
+              </div>
+            </form>
+          </aside>
+
+          <section class="panel main-panel">
+            <div class="section-head">
+              <h2>Resumen por cuarto</h2>
+              <div class="tools">
+                <button id="exportCsv" class="secondary" type="button">Exportar CSV</button>
+                <button id="resetSample" class="ghost" type="button">Restaurar ejemplo</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cuarto</th>
+                    <th>Inquilino</th>
+                    <th>Alquiler</th>
+                    <th>Pagado</th>
+                    <th>Saldo</th>
+                    <th>Vence</th>
+                    <th>Estado</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="roomRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="workspace lower">
+          <aside class="panel">
+            <h2>Registrar pago</h2>
+            <form id="paymentForm" class="form-grid">
+              <label>
+                Cuarto
+                <select id="paymentRoom" required></select>
+              </label>
+              <label>
+                Fecha
+                <input id="paymentDate" required type="date">
+              </label>
+              <label>
+                Monto
+                <input id="paymentAmount" required type="number" min="0" step="0.01">
+              </label>
+              <label>
+                Nota
+                <input id="paymentNote" placeholder="Yape, efectivo, adelanto...">
+              </label>
+              <button type="submit">Agregar pago</button>
+            </form>
+          </aside>
+
+          <section class="panel main-panel">
+            <div class="section-head">
+              <h2>Pagos del mes</h2>
+              <span id="paymentCount" class="muted">0 registros</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Cuarto</th>
+                    <th>Inquilino</th>
+                    <th>Monto</th>
+                    <th>Nota</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="paymentRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+      </section>
+
+      <section id="reportsPage" class="app-page hidden" data-page="reports">
+        <section class="summary-grid report-grid" aria-label="Indicadores de reportes">
+          <article class="metric">
+            <span>Eficiencia de cobro</span>
+            <strong id="collectionRate">0%</strong>
+          </article>
+          <article class="metric warn">
+            <span>Morosidad</span>
+            <strong id="delinquencyRate">0%</strong>
+          </article>
+          <article class="metric">
+            <span>Cuartos con deuda</span>
+            <strong id="roomsWithDebt">0</strong>
+          </article>
+          <article class="metric">
+            <span>Ticket promedio</span>
+            <strong id="averageRent">S/ 0.00</strong>
+          </article>
+        </section>
+
+        <section class="report-layout">
+          <section class="panel">
+            <div class="section-head">
+              <h2>Incidencias</h2>
+              <span id="incidentCount" class="muted">0 abiertas</span>
+            </div>
+            <div id="incidentList" class="incident-list"></div>
+          </section>
+
+          <section class="panel">
+            <div class="section-head">
+              <h2>Control de cobranza</h2>
+              <span id="reportMonthLabel" class="muted">Mes actual</span>
+            </div>
+            <div class="progress-block">
+              <div class="progress-head">
+                <span>Cobrado</span>
+                <strong id="collectionProgressLabel">0%</strong>
+              </div>
+              <div class="progress-bar"><span id="collectionProgressBar"></span></div>
+            </div>
+            <dl class="report-facts">
+              <div>
+                <dt>Ingreso esperado</dt>
+                <dd id="reportExpected">S/ 0.00</dd>
+              </div>
+              <div>
+                <dt>Total cobrado</dt>
+                <dd id="reportPaid">S/ 0.00</dd>
+              </div>
+              <div>
+                <dt>Saldo pendiente</dt>
+                <dd id="reportPending">S/ 0.00</dd>
+              </div>
+              <div>
+                <dt>Cuartos disponibles</dt>
+                <dd id="availableRooms">0</dd>
+              </div>
+            </dl>
+          </section>
+        </section>
+
+        <section class="panel lower">
+          <div class="section-head">
+            <h2>Detalle de incidencias por cuarto</h2>
+            <span class="muted">Vencidos, parciales y sin registrar</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cuarto</th>
+                  <th>Inquilino</th>
+                  <th>Vence</th>
+                  <th>Alquiler</th>
+                  <th>Pagado</th>
+                  <th>Saldo</th>
+                  <th>Incidencia</th>
+                </tr>
+              </thead>
+              <tbody id="incidentRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel lower">
+          <div class="section-head">
+            <h2>Pagos recientes</h2>
+            <span id="recentPaymentTotal" class="muted">0 pagos</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Cuarto</th>
+                  <th>Inquilino</th>
+                  <th>Monto</th>
+                  <th>Nota</th>
+                </tr>
+              </thead>
+              <tbody id="recentPaymentRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="userAdminPanel" class="app-page workspace hidden" data-page="users">
+        <aside class="panel">
+          <h2>Usuario</h2>
+          <form id="userForm" class="form-grid">
+            <input type="hidden" id="userId">
+            <label>
+              Nombre
+              <input id="userName" required placeholder="Nombre de usuario">
+            </label>
+            <label>
+              Correo
+              <input id="username" required type="email" autocomplete="off" placeholder="usuario@tudominio.com">
+            </label>
+            <label>
+              Rol
+              <select id="userRole">
+                <option value="admin">Administrador</option>
+                <option value="operator">Operador</option>
+                <option value="viewer">Solo lectura</option>
+              </select>
+            </label>
+            <p class="muted">Los usuarios se crean en Supabase Auth. Aqui administras nombre, rol y estado.</p>
+            <label class="check-row">
+              <input id="userActive" type="checkbox" checked>
+              Activo
+            </label>
+            <div class="actions">
+              <button type="submit">Guardar usuario</button>
+              <button type="button" class="secondary" id="clearUser">Limpiar</button>
+            </div>
+          </form>
+        </aside>
+
+        <section class="panel main-panel">
+          <div class="section-head">
+            <h2>Usuarios</h2>
+            <span class="muted">Roles y accesos</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Usuario</th>
+                  <th>Rol</th>
+                  <th>Estado</th>
+                  <th>Ultimo acceso</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="userRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
