@@ -48,7 +48,6 @@ const els = {
   paymentForm: document.querySelector("#paymentForm"),
   clearRoom: document.querySelector("#clearRoom"),
   exportCsv: document.querySelector("#exportCsv"),
-  resetSample: document.querySelector("#resetSample"),
   userAdminPanel: document.querySelector("#userAdminPanel"),
   userForm: document.querySelector("#userForm"),
   userRows: document.querySelector("#userRows"),
@@ -121,7 +120,6 @@ function bindEvents() {
   els.clearRoom.addEventListener("click", clearRoomForm);
   els.clearUser.addEventListener("click", clearUserForm);
   els.exportCsv.addEventListener("click", exportCsv);
-  els.resetSample.addEventListener("click", restoreSampleData);
 }
 
 async function handleLogin(event) {
@@ -232,7 +230,6 @@ function applyPermissions() {
   setFormDisabled(els.roomForm, !writable);
   setFormDisabled(els.paymentForm, !writable);
   els.clearRoom.disabled = !writable;
-  els.resetSample.classList.toggle("hidden", !admin);
   els.usersNavBtn.classList.toggle("hidden", !admin);
   if (!admin && currentPage === "users") currentPage = "control";
 }
@@ -398,6 +395,37 @@ async function deletePayment(id) {
   render();
 }
 
+async function quickPayRoom(id) {
+  if (!canWrite()) return;
+
+  const selectedMonth = els.monthPicker.value;
+  const room = state.rooms.find((item) => item.id === id);
+  if (!room || room.status !== "occupied") return;
+
+  const paid = state.payments
+    .filter((payment) => payment.roomId === id && monthKey(new Date(`${payment.date}T00:00:00`)) === selectedMonth)
+    .reduce((sum, payment) => sum + payment.amount, 0);
+  const due = Math.max(room.rent - paid, 0);
+  if (due <= 0) return;
+
+  if (!confirm(`Registrar pago rapido de ${money.format(due)} para ${room.name}?`)) return;
+
+  const payment = {
+    room_id: id,
+    date: paymentDateForMonth(selectedMonth),
+    amount: due,
+    note: "Pago rapido",
+  };
+  const { data, error } = await db.from("payments").insert(payment).select().single();
+  if (error) {
+    throwAlert(error.message);
+    return;
+  }
+
+  state.payments.push(rowToPayment(data));
+  render();
+}
+
 function editUser(id) {
   if (!canAdmin()) return;
   const user = state.users.find((item) => item.id === id);
@@ -452,34 +480,6 @@ function clearUserForm() {
   fields.userActive.checked = true;
 }
 
-async function restoreSampleData() {
-  if (!canAdmin()) return;
-  if (!confirm("Esto agregara cuartos y pagos de ejemplo en Supabase.")) return;
-
-  const sample = sampleState();
-  const { data: rooms, error: roomError } = await db.from("rooms").insert(sample.rooms.map(roomToRow)).select();
-  if (roomError) {
-    throwAlert(roomError.message);
-    return;
-  }
-
-  const roomMap = new Map(sample.rooms.map((room, index) => [room.id, rooms[index].id]));
-  const payments = sample.payments.map((payment) => ({
-    room_id: roomMap.get(payment.roomId),
-    date: payment.date,
-    amount: payment.amount,
-    note: payment.note,
-  }));
-  const { error: paymentError } = await db.from("payments").insert(payments);
-  if (paymentError) {
-    throwAlert(paymentError.message);
-    return;
-  }
-
-  await loadData();
-  render();
-}
-
 function render() {
   const selectedMonth = els.monthPicker.value;
   const monthPayments = state.payments.filter((payment) => monthKey(new Date(`${payment.date}T00:00:00`)) === selectedMonth);
@@ -523,7 +523,8 @@ function renderRooms(monthPayments, selectedMonth) {
         ? `<span class="status ok">Pagado</span>`
         : `<span class="status pending">Debe ${money.format(due)}</span>`;
     const actions = canWrite()
-      ? `<button class="secondary" type="button" onclick="editRoom('${room.id}')">Editar</button>
+      ? `${due > 0 ? `<button type="button" onclick="quickPayRoom('${room.id}')">Pagar</button>` : ""}
+         <button class="secondary" type="button" onclick="editRoom('${room.id}')">Editar</button>
          <button class="danger" type="button" onclick="deleteRoom('${room.id}')">Eliminar</button>`
       : "";
 
@@ -843,21 +844,6 @@ function profileToUser(profile) {
   };
 }
 
-function sampleState() {
-  const currentMonth = monthKey(new Date());
-  return {
-    rooms: [
-      { id: "r1", name: "Cuarto 1", tenant: "Rosa Mendoza", phone: "999 111 222", rent: 450, dueDay: 5, status: "occupied" },
-      { id: "r2", name: "Cuarto 2", tenant: "Luis Torres", phone: "988 333 444", rent: 500, dueDay: 5, status: "occupied" },
-      { id: "r3", name: "Cuarto 3", tenant: "", phone: "", rent: 480, dueDay: 10, status: "available" },
-    ],
-    payments: [
-      { roomId: "r1", date: `${currentMonth}-04`, amount: 450, note: "Yape" },
-      { roomId: "r2", date: `${currentMonth}-06`, amount: 250, note: "Adelanto" },
-    ],
-  };
-}
-
 function canAdmin() {
   return currentUser?.role === "admin";
 }
@@ -889,6 +875,16 @@ function monthLabel(month) {
 function todayKey() {
   const now = new Date();
   return `${monthKey(now)}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function paymentDateForMonth(month) {
+  const today = new Date();
+  if (month === monthKey(today)) return todayKey();
+
+  const [year, monthNumber] = month.split("-").map(Number);
+  const lastDay = new Date(year, monthNumber, 0).getDate();
+  const day = Math.min(today.getDate(), lastDay);
+  return `${month}-${String(day).padStart(2, "0")}`;
 }
 
 function dateKey(date) {
