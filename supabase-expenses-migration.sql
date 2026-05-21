@@ -1,7 +1,7 @@
 create table if not exists public.expenses (
   id uuid primary key default gen_random_uuid(),
   date date not null,
-  category text not null check (category in ('Luz', 'Agua', 'Limpieza', 'Internet', 'Cable', 'Otro')),
+  category text not null check (category in ('Luz', 'Agua', 'Limpieza', 'Internet', 'Cable', 'Prestamo', 'Otro')),
   amount numeric(12,2) not null default 0,
   vendor text,
   note text,
