@@ -29,6 +29,17 @@ create table if not exists public.payments (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.expenses (
+  id uuid primary key default gen_random_uuid(),
+  date date not null,
+  category text not null check (category in ('Luz', 'Agua', 'Limpieza', 'Internet', 'Otro')),
+  amount numeric(12,2) not null default 0,
+  vendor text,
+  note text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -80,6 +91,7 @@ $$;
 alter table public.profiles enable row level security;
 alter table public.rooms enable row level security;
 alter table public.payments enable row level security;
+alter table public.expenses enable row level security;
 
 drop policy if exists "profiles_select_active" on public.profiles;
 drop policy if exists "profiles_admin_update" on public.profiles;
@@ -87,6 +99,8 @@ drop policy if exists "rooms_select_active" on public.rooms;
 drop policy if exists "rooms_write_admin_operator" on public.rooms;
 drop policy if exists "payments_select_active" on public.payments;
 drop policy if exists "payments_write_admin_operator" on public.payments;
+drop policy if exists "expenses_select_active" on public.expenses;
+drop policy if exists "expenses_write_admin_operator" on public.expenses;
 
 create policy "profiles_select_active"
 on public.profiles for select
@@ -117,6 +131,17 @@ using (public.is_active_user());
 
 create policy "payments_write_admin_operator"
 on public.payments for all
+to authenticated
+using (public.current_user_role() in ('admin', 'operator'))
+with check (public.current_user_role() in ('admin', 'operator'));
+
+create policy "expenses_select_active"
+on public.expenses for select
+to authenticated
+using (public.is_active_user());
+
+create policy "expenses_write_admin_operator"
+on public.expenses for all
 to authenticated
 using (public.current_user_role() in ('admin', 'operator'))
 with check (public.current_user_role() in ('admin', 'operator'));

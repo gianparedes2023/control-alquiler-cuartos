@@ -1,6 +1,7 @@
 const state = {
   rooms: [],
   payments: [],
+  expenses: [],
   users: [],
 };
 
@@ -44,9 +45,17 @@ const els = {
   paymentRows: document.querySelector("#paymentRows"),
   paymentRoom: document.querySelector("#paymentRoom"),
   paymentCount: document.querySelector("#paymentCount"),
+  expenseRows: document.querySelector("#expenseRows"),
+  expenseCount: document.querySelector("#expenseCount"),
+  expenseTotal: document.querySelector("#expenseTotal"),
+  netBalance: document.querySelector("#netBalance"),
+  expenseCountMetric: document.querySelector("#expenseCountMetric"),
+  topExpenseCategory: document.querySelector("#topExpenseCategory"),
   roomForm: document.querySelector("#roomForm"),
   paymentForm: document.querySelector("#paymentForm"),
+  expenseForm: document.querySelector("#expenseForm"),
   clearRoom: document.querySelector("#clearRoom"),
+  clearExpense: document.querySelector("#clearExpense"),
   exportCsv: document.querySelector("#exportCsv"),
   userAdminPanel: document.querySelector("#userAdminPanel"),
   userForm: document.querySelector("#userForm"),
@@ -63,6 +72,8 @@ const els = {
   collectionProgressBar: document.querySelector("#collectionProgressBar"),
   reportExpected: document.querySelector("#reportExpected"),
   reportPaid: document.querySelector("#reportPaid"),
+  reportExpenses: document.querySelector("#reportExpenses"),
+  reportNet: document.querySelector("#reportNet"),
   reportPending: document.querySelector("#reportPending"),
   availableRooms: document.querySelector("#availableRooms"),
   incidentRows: document.querySelector("#incidentRows"),
@@ -81,6 +92,12 @@ const fields = {
   paymentDate: document.querySelector("#paymentDate"),
   paymentAmount: document.querySelector("#paymentAmount"),
   paymentNote: document.querySelector("#paymentNote"),
+  expenseId: document.querySelector("#expenseId"),
+  expenseDate: document.querySelector("#expenseDate"),
+  expenseCategory: document.querySelector("#expenseCategory"),
+  expenseAmount: document.querySelector("#expenseAmount"),
+  expenseVendor: document.querySelector("#expenseVendor"),
+  expenseNote: document.querySelector("#expenseNote"),
   userId: document.querySelector("#userId"),
   userName: document.querySelector("#userName"),
   username: document.querySelector("#username"),
@@ -93,6 +110,7 @@ init();
 async function init() {
   els.monthPicker.value = monthKey(new Date());
   fields.paymentDate.value = todayKey();
+  fields.expenseDate.value = todayKey();
   bindEvents();
 
   if (!supabaseReady) {
@@ -116,8 +134,10 @@ function bindEvents() {
   els.monthPicker.addEventListener("change", render);
   els.roomForm.addEventListener("submit", saveRoom);
   els.paymentForm.addEventListener("submit", savePayment);
+  els.expenseForm.addEventListener("submit", saveExpense);
   els.userForm.addEventListener("submit", saveUser);
   els.clearRoom.addEventListener("click", clearRoomForm);
+  els.clearExpense.addEventListener("click", clearExpenseForm);
   els.clearUser.addEventListener("click", clearUserForm);
   els.exportCsv.addEventListener("click", exportCsv);
 }
@@ -167,18 +187,23 @@ async function loadSessionUser() {
 }
 
 async function loadData() {
-  const [roomsResult, paymentsResult, profilesResult] = await Promise.all([
+  const [roomsResult, paymentsResult, expensesResult, profilesResult] = await Promise.all([
     db.from("rooms").select("*").order("name", { ascending: true }),
     db.from("payments").select("*").order("date", { ascending: false }),
+    db.from("expenses").select("*").order("date", { ascending: false }),
     db.from("profiles").select("*").order("created_at", { ascending: true }),
   ]);
 
   if (roomsResult.error) throwAlert(roomsResult.error.message);
   if (paymentsResult.error) throwAlert(paymentsResult.error.message);
+  if (expensesResult.error) {
+    console.warn("Supabase expenses error:", expensesResult.error.message);
+  }
   if (profilesResult.error && canAdmin()) throwAlert(profilesResult.error.message);
 
   state.rooms = (roomsResult.data || []).map(rowToRoom);
   state.payments = (paymentsResult.data || []).map(rowToPayment);
+  state.expenses = expensesResult.error ? [] : (expensesResult.data || []).map(rowToExpense);
   state.users = (profilesResult.data || []).map(profileToUser);
 }
 
@@ -203,6 +228,7 @@ async function logout() {
   currentPage = "control";
   state.rooms = [];
   state.payments = [];
+  state.expenses = [];
   state.users = [];
   showLogin();
 }
@@ -229,7 +255,9 @@ function applyPermissions() {
 
   setFormDisabled(els.roomForm, !writable);
   setFormDisabled(els.paymentForm, !writable);
+  setFormDisabled(els.expenseForm, !writable);
   els.clearRoom.disabled = !writable;
+  els.clearExpense.disabled = !writable;
   els.usersNavBtn.classList.toggle("hidden", !admin);
   if (!admin && currentPage === "users") currentPage = "control";
 }
@@ -301,6 +329,38 @@ async function savePayment(event) {
   state.payments.push(rowToPayment(data));
   fields.paymentAmount.value = "";
   fields.paymentNote.value = "";
+  render();
+}
+
+async function saveExpense(event) {
+  event.preventDefault();
+  if (!canWrite()) return;
+
+  const expense = {
+    date: fields.expenseDate.value,
+    category: fields.expenseCategory.value,
+    amount: Number(fields.expenseAmount.value || 0),
+    vendor: fields.expenseVendor.value.trim(),
+    note: fields.expenseNote.value.trim(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const query = fields.expenseId.value
+    ? db.from("expenses").update(expense).eq("id", fields.expenseId.value).select().single()
+    : db.from("expenses").insert(expense).select().single();
+  const { data, error } = await query;
+
+  if (error) {
+    throwAlert(error.message);
+    return;
+  }
+
+  const saved = rowToExpense(data);
+  const index = state.expenses.findIndex((item) => item.id === saved.id);
+  if (index >= 0) state.expenses[index] = saved;
+  else state.expenses.push(saved);
+
+  clearExpenseForm();
   render();
 }
 
@@ -395,6 +455,35 @@ async function deletePayment(id) {
   render();
 }
 
+function editExpense(id) {
+  if (!canWrite()) return;
+  const expense = state.expenses.find((item) => item.id === id);
+  if (!expense) return;
+
+  fields.expenseId.value = expense.id;
+  fields.expenseDate.value = expense.date;
+  fields.expenseCategory.value = expense.category;
+  fields.expenseAmount.value = expense.amount;
+  fields.expenseVendor.value = expense.vendor;
+  fields.expenseNote.value = expense.note;
+  fields.expenseDate.focus();
+}
+
+async function deleteExpense(id) {
+  if (!canWrite()) return;
+  const expense = state.expenses.find((item) => item.id === id);
+  if (!expense || !confirm(`Eliminar gasto de ${expense.category}?`)) return;
+
+  const { error } = await db.from("expenses").delete().eq("id", id);
+  if (error) {
+    throwAlert(error.message);
+    return;
+  }
+
+  state.expenses = state.expenses.filter((item) => item.id !== id);
+  render();
+}
+
 async function quickPayRoom(id) {
   if (!canWrite()) return;
 
@@ -473,6 +562,13 @@ function clearRoomForm() {
   fields.roomStatus.value = "occupied";
 }
 
+function clearExpenseForm() {
+  els.expenseForm.reset();
+  fields.expenseId.value = "";
+  fields.expenseDate.value = todayKey();
+  fields.expenseCategory.value = "Luz";
+}
+
 function clearUserForm() {
   els.userForm.reset();
   fields.userId.value = "";
@@ -483,9 +579,11 @@ function clearUserForm() {
 function render() {
   const selectedMonth = els.monthPicker.value;
   const monthPayments = state.payments.filter((payment) => monthKey(new Date(`${payment.date}T00:00:00`)) === selectedMonth);
+  const monthExpenses = state.expenses.filter((expense) => monthKey(new Date(`${expense.date}T00:00:00`)) === selectedMonth);
   const occupiedRooms = state.rooms.filter((room) => room.status === "occupied");
   const expected = occupiedRooms.reduce((sum, room) => sum + room.rent, 0);
   const paid = monthPayments.reduce((sum, payment) => sum + payment.amount, 0);
+  const expenses = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
 
   els.expectedTotal.textContent = money.format(expected);
   els.paidTotal.textContent = money.format(paid);
@@ -495,7 +593,8 @@ function render() {
   renderRoomOptions();
   renderRooms(monthPayments, selectedMonth);
   renderPayments(monthPayments);
-  renderReports(monthPayments, selectedMonth);
+  renderExpenses(monthExpenses, paid, expenses);
+  renderReports(monthPayments, monthExpenses, selectedMonth);
   renderUsers();
 }
 
@@ -569,6 +668,38 @@ function renderPayments(monthPayments) {
     }).join("");
 }
 
+function renderExpenses(monthExpenses, paid, totalExpenses) {
+  els.expenseTotal.textContent = money.format(totalExpenses);
+  els.netBalance.textContent = money.format(paid - totalExpenses);
+  els.expenseCountMetric.textContent = String(monthExpenses.length);
+  els.topExpenseCategory.textContent = topExpenseCategory(monthExpenses);
+  els.expenseCount.textContent = `${monthExpenses.length} ${monthExpenses.length === 1 ? "registro" : "registros"}`;
+
+  if (!monthExpenses.length) {
+    els.expenseRows.innerHTML = `<tr><td class="empty" colspan="6">Todavia no hay gastos registrados en este mes.</td></tr>`;
+    return;
+  }
+
+  els.expenseRows.innerHTML = [...monthExpenses]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .map((expense) => {
+      const actions = canWrite()
+        ? `<button class="secondary" type="button" onclick="editExpense('${expense.id}')">Editar</button>
+           <button class="danger" type="button" onclick="deleteExpense('${expense.id}')">Eliminar</button>`
+        : "";
+      return `
+        <tr>
+          <td>${formatDate(expense.date)}</td>
+          <td>${escapeHtml(expense.category)}</td>
+          <td>${money.format(expense.amount)}</td>
+          <td>${escapeHtml(expense.vendor || "-")}</td>
+          <td>${escapeHtml(expense.note || "-")}</td>
+          <td>${actions}</td>
+        </tr>
+      `;
+    }).join("");
+}
+
 function renderUsers() {
   if (!canAdmin()) return;
 
@@ -594,8 +725,8 @@ function renderUsers() {
     .join("");
 }
 
-function renderReports(monthPayments, selectedMonth) {
-  const report = buildMonthlyReport(monthPayments, selectedMonth);
+function renderReports(monthPayments, monthExpenses, selectedMonth) {
+  const report = buildMonthlyReport(monthPayments, monthExpenses, selectedMonth);
 
   els.collectionRate.textContent = `${report.collectionRate}%`;
   els.delinquencyRate.textContent = `${report.delinquencyRate}%`;
@@ -607,6 +738,8 @@ function renderReports(monthPayments, selectedMonth) {
   els.collectionProgressBar.style.width = `${report.collectionRate}%`;
   els.reportExpected.textContent = money.format(report.expected);
   els.reportPaid.textContent = money.format(report.paid);
+  els.reportExpenses.textContent = money.format(report.expenses);
+  els.reportNet.textContent = money.format(report.net);
   els.reportPending.textContent = money.format(report.pending);
   els.availableRooms.textContent = String(report.availableRooms.length);
 
@@ -715,11 +848,12 @@ function renderRecentPayments(recentPayments) {
   }).join("");
 }
 
-function buildMonthlyReport(monthPayments, selectedMonth) {
+function buildMonthlyReport(monthPayments, monthExpenses, selectedMonth) {
   const occupiedRooms = state.rooms.filter((room) => room.status === "occupied");
   const availableRooms = state.rooms.filter((room) => room.status === "available");
   const expected = occupiedRooms.reduce((sum, room) => sum + room.rent, 0);
   const paid = monthPayments.reduce((sum, payment) => sum + payment.amount, 0);
+  const expenses = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   const pending = Math.max(expected - paid, 0);
   const today = new Date(`${todayKey()}T00:00:00`);
   const currentMonth = monthKey(today);
@@ -754,6 +888,8 @@ function buildMonthlyReport(monthPayments, selectedMonth) {
   return {
     expected,
     paid,
+    expenses,
+    net: paid - expenses,
     pending,
     collectionRate: expected ? Math.min(100, Math.round((paid / expected) * 100)) : 0,
     delinquencyRate: expected ? Math.round((pending / expected) * 100) : 0,
@@ -829,6 +965,17 @@ function rowToPayment(row) {
     roomId: row.room_id,
     date: row.date,
     amount: Number(row.amount || 0),
+    note: row.note || "",
+  };
+}
+
+function rowToExpense(row) {
+  return {
+    id: row.id,
+    date: row.date,
+    category: row.category,
+    amount: Number(row.amount || 0),
+    vendor: row.vendor || "",
     note: row.note || "",
   };
 }
@@ -925,6 +1072,17 @@ function csvCell(value) {
 
 function sumBy(items, key) {
   return items.reduce((sum, item) => sum + Number(item[key] || 0), 0);
+}
+
+function topExpenseCategory(expenses) {
+  if (!expenses.length) return "-";
+
+  const totals = expenses.reduce((map, expense) => {
+    map.set(expense.category, (map.get(expense.category) || 0) + expense.amount);
+    return map;
+  }, new Map());
+  const [category] = [...totals.entries()].sort((a, b) => b[1] - a[1])[0];
+  return category;
 }
 
 function escapeHtml(value) {

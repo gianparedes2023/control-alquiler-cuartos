@@ -46,6 +46,7 @@
 
       <nav class="app-nav" aria-label="Secciones">
         <button class="nav-btn active" type="button" data-page-target="control">Control</button>
+        <button class="nav-btn" type="button" data-page-target="expenses">Gastos</button>
         <button class="nav-btn" type="button" data-page-target="reports">Reportes</button>
         <button id="usersNavBtn" class="nav-btn hidden" type="button" data-page-target="users">Usuarios</button>
       </nav>
@@ -184,6 +185,88 @@
         </section>
       </section>
 
+      <section id="expensesPage" class="app-page hidden" data-page="expenses">
+        <section class="summary-grid" aria-label="Resumen de gastos">
+          <article class="metric warn">
+            <span>Gastos del mes</span>
+            <strong id="expenseTotal">S/ 0.00</strong>
+          </article>
+          <article class="metric">
+            <span>Saldo real</span>
+            <strong id="netBalance">S/ 0.00</strong>
+          </article>
+          <article class="metric">
+            <span>Pagos registrados</span>
+            <strong id="expenseCountMetric">0</strong>
+          </article>
+          <article class="metric">
+            <span>Mayor rubro</span>
+            <strong id="topExpenseCategory">-</strong>
+          </article>
+        </section>
+
+        <section class="workspace">
+          <aside class="panel">
+            <h2>Registrar gasto</h2>
+            <form id="expenseForm" class="form-grid">
+              <input type="hidden" id="expenseId">
+              <label>
+                Fecha
+                <input id="expenseDate" required type="date">
+              </label>
+              <label>
+                Rubro
+                <select id="expenseCategory" required>
+                  <option value="Luz">Luz</option>
+                  <option value="Agua">Agua</option>
+                  <option value="Limpieza">Limpieza</option>
+                  <option value="Internet">Internet</option>
+                  <option value="Otro">Otro</option>
+                </select>
+              </label>
+              <label>
+                Monto
+                <input id="expenseAmount" required type="number" min="0" step="0.01">
+              </label>
+              <label>
+                Proveedor / recibo
+                <input id="expenseVendor" placeholder="Enel, Sedapal, recibo 001...">
+              </label>
+              <label>
+                Nota
+                <input id="expenseNote" placeholder="Mes, detalle o comentario">
+              </label>
+              <div class="actions">
+                <button type="submit">Guardar gasto</button>
+                <button type="button" class="secondary" id="clearExpense">Limpiar</button>
+              </div>
+            </form>
+          </aside>
+
+          <section class="panel main-panel">
+            <div class="section-head">
+              <h2>Gastos del mes</h2>
+              <span id="expenseCount" class="muted">0 registros</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Rubro</th>
+                    <th>Monto</th>
+                    <th>Proveedor / recibo</th>
+                    <th>Nota</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="expenseRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+      </section>
+
       <section id="reportsPage" class="app-page hidden" data-page="reports">
         <section class="summary-grid report-grid" aria-label="Indicadores de reportes">
           <article class="metric">
@@ -233,6 +316,14 @@
               <div>
                 <dt>Total cobrado</dt>
                 <dd id="reportPaid">S/ 0.00</dd>
+              </div>
+              <div>
+                <dt>Total gastos</dt>
+                <dd id="reportExpenses">S/ 0.00</dd>
+              </div>
+              <div>
+                <dt>Saldo real</dt>
+                <dd id="reportNet">S/ 0.00</dd>
               </div>
               <div>
                 <dt>Saldo pendiente</dt>
@@ -349,7 +440,7 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-    <script src="supabase-config.js?v=3"></script>
-    <script src="app.js?v=3"></script>
+    <script src="supabase-config.js?v=4"></script>
+    <script src="app.js?v=4"></script>
   </body>
 </html>
